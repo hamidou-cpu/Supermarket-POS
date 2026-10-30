@@ -1,0 +1,395 @@
+DESCRIPTION DU PROJET - SUPERMARKET POS
+Fiche de préparation pour entretien technique
+============================================================
+
+1. PRESENTATION GENERALE
+------------------------
+
+SuperMarket POS est une application web de gestion pour un supermarché. Elle
+réunit une interface de caisse et un espace d'administration. L'objectif est de
+centraliser les ventes, le catalogue produits, les niveaux de stock, les
+fournisseurs, les clients et les indicateurs commerciaux dans une seule
+application.
+
+L'application distingue deux profils :
+- Administrateur : accès aux tableaux de bord, rapports et fonctions de gestion.
+- Caissier : accès à l'interface de point de vente.
+
+Il s'agit d'une application monopage (SPA) côté navigateur. Le frontend échange
+directement avec Supabase pour lire et écrire les données. Le dépôt ne contient
+pas de serveur applicatif/API métier séparé.
+
+2. PITCH ORAL (ENVIRON 30 SECONDES)
+-----------------------------------
+
+« SuperMarket POS est une application web de gestion de supermarché que j'ai
+réalisée avec React, TypeScript, Vite et Supabase. Elle couvre le parcours de
+caisse, avec recherche ou scan de produits, panier, choix du mode de paiement et
+génération d'un ticket PDF. Côté administration, elle propose la gestion du
+catalogue et des stocks, des clients et fournisseurs, ainsi que des rapports
+commerciaux et financiers. Les données sont stockées dans PostgreSQL via
+Supabase, et le schéma utilise notamment des déclencheurs SQL pour mettre à jour
+les stocks et générer des alertes de stock faible. »
+
+Adapter « réalisée » à votre contribution réelle : en entretien, distinguer les
+parties que vous avez personnellement développées, intégrées ou simplement
+maintenues.
+
+3. ARCHITECTURE TECHNIQUE
+-------------------------
+
+Frontend
+- React 18 et TypeScript : composants fonctionnels, hooks et types métier.
+- Vite : serveur de développement et construction de l'application.
+- Tailwind CSS : styles utilitaires et mise en page.
+- lucide-react : icônes.
+- Chart.js et react-chartjs-2 : graphiques de KPI, ventes et finances.
+- jsPDF : tickets de caisse et rapports PDF.
+- qrcode.react : rendu de QR codes associés aux codes-barres des produits.
+
+Backend et données
+- Supabase JS v2 fournit le client navigateur vers Supabase.
+- PostgreSQL contient les utilisateurs applicatifs, produits, ventes, etc.
+- Le schéma et son évolution sont décrits dans supabase/migrations/.
+- Des clés étrangères, des index, des règles RLS et des fonctions/déclencheurs
+  SQL apparaissent dans ces migrations.
+- La configuration attend VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY.
+
+Organisation logique
+- src/components/ : écrans et composants de l'interface.
+- src/contexts/ : états partagés (authentification, réseau/synchronisation,
+  notifications et confirmations).
+- src/lib/ : accès Supabase et fonctions techniques partagées (auth, cache,
+  pagination, journal d'audit, historique de stock, stockage hors ligne).
+- supabase/migrations/ : création/évolution du schéma et politiques SQL.
+
+Point d'architecture à expliquer : les composants interrogent souvent Supabase
+directement avec supabase.from(...). Il n'y a pas de couche API serveur métier
+entre l'interface et la base.
+
+4. PARCOURS PRINCIPAL ET FICHIERS
+---------------------------------
+
+Démarrage et navigation
+- src/main.tsx monte l'application React dans le DOM et charge src/index.css.
+- src/App.tsx compose AuthProvider, OfflineProvider et ToastProvider. Il affiche
+  Login si aucun utilisateur n'est présent dans le contexte, sinon Dashboard.
+- src/components/Dashboard.tsx fournit la navigation latérale, les menus par
+  rôle, l'affichage du profil et le rendu de la vue sélectionnée. L'admin démarre
+  sur les KPI; le caissier démarre sur la caisse.
+- src/index.css importe Tailwind et définit l'animation des notifications.
+
+Connexion et comptes
+- src/components/Login.tsx affiche le formulaire email/mot de passe.
+- src/contexts/AuthContext.tsx conserve l'utilisateur courant dans l'état React
+  et expose login, logout et isAdmin via useAuth().
+- src/lib/auth.ts recherche l'utilisateur dans la table users, vérifie le mot de
+  passe haché et conserve le profil courant dans localStorage.
+- src/components/admin/UserManagement.tsx permet de consulter, créer, modifier
+  et supprimer les comptes et de choisir le rôle admin ou cashier.
+
+Caisse et ventes
+- src/components/cashier/CashierInterface.tsx constitue l'écran de caisse :
+  chargement/recherche de produits, lecture clavier du code-barres, ajout et
+  modification des quantités, contrôle du stock affiché, panier, produits
+  récents, paniers sauvegardés dans localStorage et mode rapide.
+- La recherche d'un client par téléphone est aussi proposée depuis la caisse.
+- Le sous-composant PaymentModal du même fichier enregistre une vente dans sales,
+  les lignes dans sale_items, puis génère un ticket PDF avec jsPDF.
+- Les moyens de paiement pris en charge dans l'interface sont espèces (cash),
+  carte (card) et mobile.
+- src/lib/audit.ts contient des fonctions prévues pour tracer des paiements,
+  modifications de produits et exports.
+- Le déclencheur SQL de la migration initiale met à jour le stock et crée un
+  mouvement quand une ligne de vente est insérée dans sale_items.
+
+5. FONCTIONNALITES ADMINISTRATIVES
+----------------------------------
+
+Tableau de bord exécutif
+- src/components/admin/ExecutiveKPIs.tsx calcule le chiffre d'affaires, le
+  bénéfice estimé, la marge, le panier moyen, le nombre de transactions, le
+  nombre de produits sous le seuil et la valeur d'achat du stock.
+- Les périodes proposées sont le jour, la semaine, le mois et l'année.
+- Les graphiques incluent l'évolution du chiffre d'affaires, les meilleurs
+  produits et la répartition des modes de paiement.
+
+Gestion des produits
+- src/components/admin/ProductManagement.tsx permet le CRUD des produits,
+  c'est-à-dire création, consultation, modification et suppression.
+- Les champs comprennent nom, code-barres, catégorie, fournisseur, prix d'achat,
+  prix de vente, quantité, seuil minimal et description.
+- Le composant permet d'afficher un QR code à partir du code-barres.
+
+Catégories
+- src/components/admin/CategoryManagement.tsx gère les catégories et leur
+  description, avec création, modification et suppression.
+
+Fournisseurs
+- src/components/admin/SupplierManagement.tsx gère les coordonnées, le statut,
+  la catégorie et la note du fournisseur; recherche et filtre par statut sont
+  disponibles.
+- Il affiche aussi des statistiques construites à partir des produits associés
+  et des lignes de vente correspondantes.
+
+Stock et historique des mouvements
+- src/components/admin/StockManagement.tsx affiche les produits, recherche par
+  nom/code-barres, filtre rupture/stock faible/normal et tri par nom ou quantité.
+- Il permet d'ajuster le seuil minimal et d'enregistrer un mouvement entrant ou
+  sortant, avec quantité, référence et notes.
+- src/lib/stockHistory.ts fournit des fonctions d'écriture/lecture de l'historique
+  détaillé stock_history et de synthèse par produit.
+- La table stock_movements est utilisée pour les mouvements entrants/sortants;
+  stock_history est une chronologie complémentaire avec les quantités avant et
+  après.
+
+Alertes de stock faible
+- src/components/admin/LowStockAlerts.tsx présente les produits en alerte et les
+  notifications : filtre non lues/toutes/confirmées, confirmation individuelle
+  ou globale et suppression d'une notification.
+- src/components/Dashboard.tsx actualise le compteur d'alertes environ toutes les
+  15 secondes; l'écran d'alertes recharge ses données environ toutes les
+  30 secondes.
+- supabase/migrations/20260520134249_add_auto_low_stock_alert_trigger.sql ajoute
+  une fonction et des déclencheurs pour créer une alerte quand un produit passe
+  sous son seuil minimal.
+
+Rapports de ventes
+- src/components/admin/SalesReport.tsx affiche les ventes terminées, applique
+  des périodes prédéfinies ou personnalisées, calcule chiffre d'affaires,
+  bénéfice, marge et panier moyen, et détaille les produits vendus.
+- Un rapport PDF est généré avec jsPDF.
+
+Finances
+- src/components/admin/FinancialDashboard.tsx présente revenus, coûts d'achat,
+  bénéfice, marge, modes de paiement et produits les plus rentables.
+- Des indicateurs d'alerte sont calculés dans l'interface, par exemple une marge
+  faible ou une part de paiements par carte basse.
+
+Analyse d'inventaire et comptage physique
+- src/components/admin/InventoryAnalysis.tsx exploite les ventes des 30 derniers
+  jours pour estimer la moyenne vendue par jour, les jours de stock restants, une
+  quantité suggérée de réapprovisionnement et une priorité.
+- Il propose un mode inventaire physique qui écrit la quantité comptée dans
+  products et enregistre l'écart dans stock_history.
+
+Clients et fidélité
+- src/components/admin/CustomerManagement.tsx gère les fiches client, recherche,
+  pagination, historique d'achat, niveau de fidélité et solde de points.
+- Dans PaymentModal, une vente liée à un client ajoute des points (règle actuelle
+  : floor(total / 10)) et met à jour les totaux et le niveau bronze/argent/or/
+  platine selon le montant cumulé.
+- Tables concernées : customers, customer_purchases et loyalty_points.
+
+Utilisateurs et rôles
+- src/components/admin/UserManagement.tsx permet le CRUD des utilisateurs et
+  l'attribution du rôle admin/cashier.
+- Le menu de Dashboard masque les vues d'administration au caissier.
+
+Export de données
+- src/components/admin/ExportData.tsx télécharge les ventes, produits, données
+  d'inventaire ou clients en CSV ou JSON.
+- Les exports de ventes et d'historique d'inventaire acceptent des dates de
+  début et de fin.
+
+Journal d'audit
+- src/components/admin/AuditLogs.tsx consulte, filtre par période/action/entité
+  et exporte en CSV les entrées de audit_logs.
+- src/lib/audit.ts expose auditLog, logSale, logProductChange et logExport.
+
+6. MODE HORS LIGNE ET SERVICES PARTAGES
+---------------------------------------
+
+- src/lib/offline.ts définit une base IndexedDB pos_offline pour conserver des
+  transactions en attente, ainsi que des fonctions de lecture, marquage et
+  suppression et la détection des événements online/offline.
+- src/contexts/OfflineContext.tsx suit la connectivité et le nombre de ventes en
+  attente; quand le réseau revient, syncPending tente de les envoyer à Supabase.
+- src/components/cashier/CashierInterface.tsx affiche un indicateur Online,
+  Offline ou « à synchroniser ».
+- src/lib/cache.ts fournit un cache mémoire à durée de vie limitée (TTL, cinq
+  minutes par défaut) et src/lib/pagination.ts des fonctions de pagination.
+- src/contexts/ToastContext.tsx centralise les notifications temporaires et les
+  demandes de confirmation.
+
+Nuance importante : le stockage IndexedDB et la logique de synchronisation sont
+présents, mais le parcours de paiement actuellement lu n'appelle pas
+saveOfflineTransaction lorsque le réseau est indisponible. Les imports de cette
+fonction et de la détection réseau figurent dans CashierInterface.tsx, sans
+utilisation dans ce composant. Il vaut donc mieux présenter le mode hors ligne
+comme une fonctionnalité amorcée, et non comme une caisse hors ligne entièrement
+fiable.
+
+7. MODELE DE DONNEES ET MIGRATIONS
+----------------------------------
+
+Tables métier principales visibles dans le schéma initial :
+- users : email, hash du mot de passe, nom et rôle.
+- products : code-barres, prix d'achat/vente, stock et seuil minimal; liens vers
+  catégorie et fournisseur.
+- categories et suppliers : référentiels du catalogue.
+- sales et sale_items : vente, caissier, paiement, total et détail des articles.
+- stock_movements : mouvements de stock entrants/sortants.
+
+Tables additionnelles utilisées par le frontend et les migrations :
+- stock_history : historique avec quantité avant/après, différence, type,
+  utilisateur et référence.
+- alerts et audit_logs : alertes de stock et traces d'activité.
+- customers, customer_purchases et loyalty_points : clients, achats et fidélité.
+
+Principales migrations suivies dans le dépôt :
+- 20250930142218_create_supermarket_schema.sql : schéma initial, index, RLS et
+  déclencheur qui retire le stock lors de l'insertion d'une ligne de vente.
+- 20251003150918_fix_users_rls_for_login.sql : lecture anonyme de users pour
+  permettre la connexion personnalisée.
+- 20251004121114_update_rls_for_anonymous_access.sql : ouverture des lectures
+  et écritures de plusieurs tables au rôle anon.
+- 20251005142822_fix_users_table_rls_policies.sql : ouverture des écritures de
+  la table users au rôle anon.
+- 20251007105831_fix_product_deletion_constraint.sql : autorise la suppression
+  d'un produit sans supprimer son historique de vente; product_id devient NULL
+  dans sale_items et product_name conserve le libellé historique.
+- 20260520131256_add_stock_history_and_indexes.sql : ajoute stock_history et
+  divers index de consultation.
+- 20260520132640_fix_user_id_foreign_keys.sql : relie les utilisateurs des
+  alertes et de l'audit à la table public.users.
+- 20260520132750_fix_rls_policies_for_custom_auth.sql : rend les politiques
+  compatibles avec l'authentification personnalisée utilisée par l'application.
+- 20260520134249_add_auto_low_stock_alert_trigger.sql : crée les alertes
+  automatiques de seuil de stock.
+
+Important pour l'installation : les fichiers de migration présents dans le dépôt
+ne montrent pas de CREATE TABLE pour alerts, audit_logs, customers,
+customer_purchases et loyalty_points, alors que le frontend les utilise et que
+certaines migrations créent des index ou politiques dessus. Leur création peut
+donc dépendre d'un schéma déjà installé ou d'un script externe non présent dans
+ce dépôt. A vérifier avant de promettre une installation de zéro reproductible.
+
+8. SECURITE ET LIMITES A CONNAITRE EN ENTRETIEN
+----------------------------------------------
+
+Authentification et autorisations
+- L'application utilise une authentification personnalisée dans src/lib/auth.ts,
+  et non une session Supabase Auth. Le mot de passe est haché par SHA-256 côté
+  navigateur et le profil courant est stocké dans localStorage.
+- Le rôle détermine surtout les menus visibles dans le frontend. Ce masquage
+  d'interface ne remplace pas une autorisation côté serveur/base de données.
+- Plusieurs migrations accordent au rôle anon des opérations de lecture et/ou
+  écriture avec USING (true) ou WITH CHECK (true). En l'état du dépôt, ne pas
+  décrire cela comme un contrôle d'accès de production robuste. La clé anon est
+  destinée au client public; la sécurité doit venir de politiques RLS strictes
+  et d'une authentification/autorisation vérifiée côté serveur.
+- Une évolution sérieuse consisterait à utiliser Supabase Auth, associer les
+  identités applicatives aux rôles et appliquer des politiques RLS fondées sur
+  ces identités. Pour les mots de passe, laisser un fournisseur d'identité gérer
+  le stockage et la vérification serait préférable à un SHA-256 simple côté
+  client.
+
+Cohérence des ventes et du stock
+- Le frontend crée la vente puis insère ses articles dans des requêtes séparées.
+  Si la seconde étape échoue, l'en-tête de vente peut rester sans articles; il
+  n'y a pas de transaction distribuée explicitement visible côté client.
+- Une amélioration serait de déplacer la finalisation dans une fonction SQL/RPC
+  transactionnelle qui valide le stock, crée vente et articles, ajuste le stock
+  et retourne un résultat unique.
+- Le comptage physique, la mise à jour des quantités et l'enregistrement de
+  l'historique sont eux aussi plusieurs opérations séparées.
+
+Hors ligne, audit et autres écarts
+- La synchronisation hors ligne doit être reliée au checkout et être testée pour
+  les conflits, les doublons, les échecs partiels et la reprise après coupure.
+- Les helpers d'audit existent mais une recherche dans les écrans n'a pas trouvé
+  d'appel à auditLog/logSale/logProductChange/logExport. L'écran d'audit peut
+  afficher les entrées présentes en base, mais la traçabilité automatique des
+  actions n'est pas raccordée aux flux consultés.
+- ExportData.tsx annonce que les exports sont tracés; dans le code consulté,
+  l'export n'appelle pas logExport. Il faut donc considérer cette promesse UI
+  comme non confirmée par l'implémentation actuelle.
+- LowStockAlerts.tsx liste les produits avec stock_quantity < 5, tandis que le
+  déclencheur SQL compare stock_quantity à min_stock_level. Le seuil affiché dans
+  cette liste et le seuil configurable ne sont donc pas totalement cohérents.
+- Certaines opérations de stock ne vérifient pas explicitement les erreurs ou
+  les quantités négatives. Une validation serveur/base et une stratégie
+  transactionnelle seraient des améliorations prioritaires.
+- SupplierManagement.tsx affiche certains montants en euros alors que le reste
+  de l'interface exprime les prix en dirhams (DH); c'est une incohérence UI à
+  corriger.
+
+9. COMMANDES ET VERIFICATION
+----------------------------
+
+Scripts définis dans package.json :
+- npm run dev : lancer le serveur Vite de développement.
+- npm run build : construire les fichiers de production.
+- npm run preview : prévisualiser le build.
+- npm run lint : lancer ESLint.
+- npm run typecheck : vérifier les types TypeScript de l'application.
+
+Aucun fichier de test automatisé (test/spec) ni README n'a été repéré lors de la
+préparation de cette fiche. Ne pas annoncer une couverture de tests sans l'avoir
+vérifiée. La page de connexion affiche des identifiants de démonstration; leur
+fonctionnement dépend de la présence des comptes correspondants dans Supabase.
+
+10. QUESTIONS POSSIBLES ET ANGLES DE REPONSE
+--------------------------------------------
+
+Pourquoi React et TypeScript ?
+Réponse possible : React sépare les écrans en composants et facilite la gestion
+des interactions de caisse; TypeScript rend explicites les rôles, les objets
+produit/vente et les contrats entre composants. Vite fournit un cycle de
+développement rapide.
+
+Comment une vente modifie-t-elle le stock ?
+Réponse possible : le checkout écrit d'abord sales puis sale_items. Un déclencheur
+SQL sur sale_items décrémente le stock et ajoute un mouvement. C'est centralisé
+près des données, mais les requêtes de vente ne sont pas regroupées dans une
+transaction unique; une RPC transactionnelle serait une amélioration.
+
+Comment les rôles fonctionnent-ils ?
+Réponse possible : AuthContext conserve l'utilisateur et son rôle; Dashboard
+affiche un menu différent pour l'admin et le caissier. Limite à reconnaître :
+le contrôle est essentiellement côté client et les politiques anon actuelles ne
+garantissent pas une séparation sécurisée des droits en production.
+
+Le mode hors ligne est-il complet ?
+Réponse possible : le projet contient IndexedDB, un état de connectivité et une
+routine de synchronisation, mais le checkout ne met pas actuellement la vente en
+file lorsqu'il est hors ligne. Je le présenterais comme une base de fonctionnalité
+à terminer et tester.
+
+Quelles améliorations prioriser ?
+Réponse possible : sécuriser l'authentification et les politiques RLS, rendre la
+création de vente atomique, compléter et tester le mode hors ligne, connecter les
+événements d'audit aux opérations réelles, puis ajouter des tests d'intégration
+sur ventes, stock et fidélité.
+
+11. FICHIERS PRINCIPAUX - INDEX RAPIDE
+--------------------------------------
+
+Application : src/main.tsx, src/App.tsx, src/components/Dashboard.tsx
+Connexion : src/components/Login.tsx, src/contexts/AuthContext.tsx,
+             src/lib/auth.ts
+Caisse : src/components/cashier/CashierInterface.tsx
+Administration : src/components/admin/
+  ExecutiveKPIs.tsx       indicateurs et graphiques
+  FinancialDashboard.tsx  revenus, coûts et marges
+  SalesReport.tsx         rapports de ventes et PDF
+  ProductManagement.tsx   catalogue produits et QR code
+  CategoryManagement.tsx  catégories
+  SupplierManagement.tsx  fournisseurs
+  StockManagement.tsx     mouvements et seuils
+  InventoryAnalysis.tsx   prévisions et inventaire physique
+  LowStockAlerts.tsx      alertes et produits en seuil bas
+  CustomerManagement.tsx clients, historique et fidélité
+  UserManagement.tsx      comptes et rôles
+  AuditLogs.tsx           consultation et export des journaux
+  ExportData.tsx          export CSV/JSON
+Etat partagé : src/contexts/AuthContext.tsx, OfflineContext.tsx,
+                ToastContext.tsx
+Services : src/lib/supabase.ts, auth.ts, offline.ts, audit.ts, cache.ts,
+           pagination.ts, stockHistory.ts
+Styles/config : src/index.css, tailwind.config.js, vite.config.ts,
+                tsconfig.app.json, package.json
+Base de données : supabase/migrations/*.sql
+
+Fin de la fiche.
